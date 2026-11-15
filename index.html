@@ -55,6 +55,7 @@ iframe{width:100%;height:calc(100% - 58px);border:0;background:#fff}
   <div class="box" id="cfgBox" hidden>
     <strong>Personalizar o site</strong>
     <p class="mut" id="syncInfo"></p>
+    <div class="row" id="codeRow" hidden style="margin-bottom:8px"><span style="flex:1 1 auto">🔑 Código secreto: <strong id="codeShow"></strong></span><button id="codeChange" style="flex:0 0 auto">Trocar código</button></div>
     <label class="f">Título <input type="text" id="cTitle" style="max-width:320px;margin:0"></label>
     <label class="f"><input type="color" id="cBg"> Cor do fundo</label>
     <label class="f"><input type="color" id="cCard"> Cor dos cartões</label>
@@ -291,6 +292,11 @@ try{
       if(code)localStorage.setItem("nossaLista.codigo",code)}
     if(code){
       BASE="listas/"+code;
+      $("#codeRow").hidden=false;$("#codeShow").textContent=code;
+      $("#codeChange").onclick=function(){
+        var n=(prompt("Novo código secreto (precisa ser o mesmo nos dois aparelhos).\nAtenção: a lista do código novo começa vazia; a do código atual continua guardada com ele.",code)||"").trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");
+        if(n&&n!==code){localStorage.setItem("nossaLista.codigo",n);location.reload()}
+      };
       firebase.initializeApp(FIREBASE_CONFIG);
       startDb(firebase.firestore());
     }
