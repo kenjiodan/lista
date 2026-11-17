@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="shortcut icon" href="sm.ico" type="image/x-icon">
 <title>Nossa Listinha</title>
 <style>
 :root{--bg:#fdf2f4;--card:#ffffff;--ink:#2b1d22;--mut:#7a6068;--acc:#e0527a;--line:#00000018;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -44,6 +43,15 @@ dialog::backdrop{background:#000a}
 .dh{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
 iframe{width:100%;height:calc(100% - 58px);border:0;background:#fff}
 .overflow{overflow-x:auto}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{flex:1;padding:10px;font-weight:600;background:var(--card)}
+.tabs button.on{background:var(--acc);color:#fff;border-color:transparent}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.sw{width:30px;height:30px;border-radius:50%;padding:0;border:3px solid var(--line)}
+.sw.on{border-color:var(--ink);transform:scale(1.12)}
+.tools button.on{background:var(--acc);color:#fff;border-color:transparent}
+#cv{width:100%;height:auto;aspect-ratio:3/2;touch-action:none;border-radius:12px;border:1px dashed var(--line);display:block;cursor:crosshair;background:var(--card)}
+
 </style>
 </head>
 <body>
@@ -68,6 +76,8 @@ iframe{width:100%;height:calc(100% - 58px);border:0;background:#fff}
     </div>
   </div>
 
+  <div class="tabs"><button id="tabLista" class="on">📝 Lista</button><button id="tabBoard">🎨 Board</button></div>
+  <div id="viewLista">
   <form class="box" id="form" onsubmit="return false">
     <input type="text" id="fText" placeholder="O que vamos fazer? (ex.: Assistir Interestelar)" maxlength="200">
     <div class="row">
@@ -85,6 +95,25 @@ iframe{width:100%;height:calc(100% - 58px);border:0;background:#fff}
   <div class="chips" id="catChips"></div>
   <div class="chips" id="stChips"></div>
   <div id="list"></div>
+  </div>
+  <div id="viewBoard" hidden>
+    <div class="box">
+      <div class="tools" id="swatches"></div>
+      <div class="tools">
+        <label class="f mut" style="margin:0"><input type="color" id="bColor" value="#e0527a"> Outra cor</label>
+        <label class="f mut" style="margin:0">Espessura <input type="range" id="bSize" min="2" max="40" value="6" style="width:120px"></label>
+      </div>
+      <div class="tools">
+        <button id="bPen" class="on">✏️ Lápis</button>
+        <button id="bEraser">🧽 Borracha</button>
+        <button id="bUndo">↩️ Desfazer</button>
+        <button id="bClear">🗑️ Limpar</button>
+        <button id="bDown">⬇️ Baixar</button>
+      </div>
+      <canvas id="cv" width="1200" height="800"></canvas>
+      <p class="mut" id="bStatus" style="margin:8px 0 0">O desenho é salvo automaticamente.</p>
+    </div>
+  </div>
 </div>
 
 <dialog id="dlg">
@@ -263,13 +292,71 @@ $("#dClose").onclick=closeFrame;
 $("#dlg").addEventListener("cancel",function(){$("#frame").src="about:blank"});
 $("#imgClose").onclick=function(){$("#imgDlg").close()};
 
+/* ---------- board ---------- */
+var cv=$("#cv"),ctx=cv.getContext("2d"),drawing=false,last=null,tool="pen",pcolor="#e0527a",psize=6,hist=[],saveT=null,cid=uid(),LSB="nossaLista.board.v1";
+ctx.lineCap="round";ctx.lineJoin="round";
+var PAL=["#2b1d22","#e0527a","#ff9f1c","#ffd93d","#4cc38a","#3aa0ff","#8b5cf6","#ffffff"];
+function setColor(c){pcolor=c;tool="pen";$("#bPen").classList.add("on");$("#bEraser").classList.remove("on");
+  document.querySelectorAll(".sw").forEach(function(b){b.classList.toggle("on",b.dataset.c===c)})}
+PAL.forEach(function(c){var b=document.createElement("button");b.className="sw";b.dataset.c=c;b.style.background=c;b.setAttribute("aria-label","Cor "+c);b.onclick=function(){setColor(c);$("#bColor").value=c};$("#swatches").appendChild(b)});
+setColor(pcolor);
+$("#bColor").oninput=function(e){setColor(e.target.value)};
+$("#bSize").oninput=function(e){psize=+e.target.value};
+$("#bPen").onclick=function(){setColor(pcolor)};
+$("#bEraser").onclick=function(){tool="eraser";$("#bEraser").classList.add("on");$("#bPen").classList.remove("on")};
+function pos(e){var r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*cv.width/r.width,y:(e.clientY-r.top)*cv.height/r.height}}
+function seg(a,b){
+  ctx.globalCompositeOperation=tool==="eraser"?"destination-out":"source-over";
+  ctx.strokeStyle=pcolor;ctx.lineWidth=tool==="eraser"?psize*2.5:psize;
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+}
+function pushHist(){hist.push(ctx.getImageData(0,0,cv.width,cv.height));if(hist.length>12)hist.shift()}
+cv.addEventListener("pointerdown",function(e){
+  e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(x){}
+  pushHist();drawing=true;last=pos(e);seg(last,{x:last.x+0.01,y:last.y});
+});
+cv.addEventListener("pointermove",function(e){if(!drawing)return;var p=pos(e);seg(last,p);last=p});
+function endDraw(){if(!drawing)return;drawing=false;queueSave()}
+cv.addEventListener("pointerup",endDraw);
+cv.addEventListener("pointercancel",endDraw);
+$("#bUndo").onclick=function(){var h=hist.pop();if(!h)return;ctx.putImageData(h,0,0);queueSave()};
+$("#bClear").onclick=function(){if(!confirm("Apagar todo o desenho?"))return;pushHist();ctx.clearRect(0,0,cv.width,cv.height);queueSave()};
+$("#bDown").onclick=function(){
+  var t=document.createElement("canvas");t.width=cv.width;t.height=cv.height;var c=t.getContext("2d");
+  c.fillStyle="#ffffff";c.fillRect(0,0,t.width,t.height);c.drawImage(cv,0,0);
+  var a=document.createElement("a");a.href=t.toDataURL("image/png");a.download="board.png";a.click();
+};
+function bstat(t){$("#bStatus").textContent=t}
+function queueSave(){clearTimeout(saveT);bstat("Salvando…");saveT=setTimeout(saveBoard,700)}
+function saveBoard(){
+  var u=cv.toDataURL("image/png");
+  if(u.length>950000){bstat("Desenho grande demais para salvar. Apague uma parte ou use o botão Baixar.");return}
+  if(db){db.doc(BASE+"/board/main").set({img:u,by:cid,ts:Date.now()}).then(function(){bstat("Salvo ✓")}).catch(function(){bstat("Não consegui salvar. Verifique a conexão e as regras do Firestore.")})}
+  else{try{localStorage.setItem(LSB,u);bstat("Salvo neste navegador ✓")}catch(e){bstat("Não consegui salvar neste navegador.")}}
+}
+function loadImg(u){var im=new Image();im.onload=function(){ctx.globalCompositeOperation="source-over";ctx.clearRect(0,0,cv.width,cv.height);ctx.drawImage(im,0,0)};im.src=u}
+function loadLocalBoard(){try{var u=localStorage.getItem(LSB);if(u)loadImg(u)}catch(e){}}
+function boardSub(){
+  db.doc(BASE+"/board/main").onSnapshot(function(s){
+    if(!s.exists)return;var d=s.data()||{};
+    if(d.img&&d.by!==cid&&!drawing)loadImg(d.img);
+  },function(){});
+}
+/* abas */
+function tab(b){
+  $("#viewLista").hidden=b;$("#viewBoard").hidden=!b;
+  $("#tabLista").classList.toggle("on",!b);$("#tabBoard").classList.toggle("on",b);
+}
+$("#tabLista").onclick=function(){tab(false)};
+$("#tabBoard").onclick=function(){tab(true)};
+
 /* ---------- início ---------- */
 function syncInfo(on){
   $("#syncInfo").textContent=on
     ?"Sincronizado: quem abrir o site com o mesmo código secreto vê e edita a mesma lista."
     :"Modo local: as anotações ficam só neste navegador. Configure o Firebase no código para sincronizar.";
 }
-lsLoad();applyCfg();render();syncInfo(false);
+lsLoad();applyCfg();render();syncInfo(false);loadLocalBoard();
 
 var started=false;
 function startDb(d){
@@ -282,6 +369,7 @@ function startDb(d){
     if(first&&!arr.length&&local.length){local.forEach(function(it){db.collection(BASE+"/items").doc(it.id).set(it).catch(function(){})})}
     first=false;items=arr;render();
   },function(){});
+  boardSub();
   db.doc(BASE+"/cfg/theme").onSnapshot(function(s){
     if(s.exists){cfg=Object.assign({},DEF,s.data());applyCfg()}
   },function(){});
